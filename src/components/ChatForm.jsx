@@ -15,6 +15,10 @@ const ChatForm = () => {
   const [text, setText] = useState(input);
   const textareaRef = useRef(null);
 
+  useEffect(() => {
+    textareaRef.current.focus();
+  }, []);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (text.trim() && !isResponding) {
