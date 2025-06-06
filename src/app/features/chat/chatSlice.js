@@ -171,7 +171,7 @@ export const submitFeedback = createAsyncThunk(
 
     try {
       const response = await axios.post(
-        'app-azuresearch-qa-ps-esa.azurewebsites.net/feedback',
+        'https://app-azuresearch-qa-ps-esa.azurewebsites.net',
         {
           session_id: sessionId,
           user_name: userId, // Use dynamic userId for user_name
