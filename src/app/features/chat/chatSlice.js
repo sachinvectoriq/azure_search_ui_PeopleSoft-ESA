@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 import apiClient from '../../../services/apiClient';
+import { toast } from 'react-toastify';
 
 let getSessionId = () => {
   let id = sessionStorage.getItem('session_id');
@@ -40,7 +41,7 @@ const cleanAiResponse = (text) => {
 // Fallback document for when no citations are available
 const getFallbackCitation = () => {
   return {
-    //id: '0',
+    id: '0',
     title: 'How to Create a PeopleSoft ESA to Aerotek Support Ticket',
     chunk: 'Please refer to this document for detailed instructions on how to raise a SNOW support ticket when you cannot find the information you are looking for.',
     parent_id: 'https://sthubdevaioc273154123411.blob.core.windows.net/snowticket/How%20to%20Create%20a%20PeopleSoft%20ESA%20to%20Aerotek%20Support%20Ticket%20(1).docx',
@@ -55,9 +56,16 @@ export const sendQuestionToAPI = createAsyncThunk(
     const sessionId = getState().chat.sessionId;
     const userId = getState().chat.userId; // Get userId from state
 
+    const userName = 'Test User';
+    // END - Change for userName here
+    const loginSessionId = 123456789;
+
+
     console.log('Sending question to API:', question);
     console.log('Session ID:', sessionId);
     console.log('User ID:', userId); // Log the userId
+    console.log('User Name:', userName); // Log for verification
+    console.log('Login Session ID :', loginSessionId); // Log for verification
 
     // Clear follow-ups at the start of a new question
     dispatch(setFollowUps([]));
@@ -108,7 +116,6 @@ export const sendQuestionToAPI = createAsyncThunk(
         // Clean the AI response text before storing
         const cleanedAiResponse = cleanAiResponse(data.ai_response);
 
-        // Check if citations array is empty and add fallback document
         let finalCitations = data.citations.map((citation) => ({
           id: citation.id, // The ID from the API response for inline linking
           title: citation.title,
@@ -127,6 +134,7 @@ export const sendQuestionToAPI = createAsyncThunk(
             id: placeholderId,
             content: cleanedAiResponse, // Keep 'content' for compatibility
             ai_response: cleanedAiResponse, // Store the cleaned AI response
+            // Map the new 'citations' array to your message structure
             citations: finalCitations, // Use finalCitations which includes fallback if needed
             query: data.query, // Store the query from the API response
           })
@@ -140,6 +148,24 @@ export const sendQuestionToAPI = createAsyncThunk(
           dispatch(setFollowUps(followUpQuestions));
         } else {
           dispatch(setFollowUps([]));
+        }
+
+        try {
+          const logData = {
+            chat_session_id: sessionId,
+            user_id: userId,
+            user_name: userName, // Use the user_name from auth slice
+            query: question, // The original question
+            ai_response: cleanedAiResponse,
+            citations: data.citations.map(c => c.title).join(', ') || 'No citations', // Format citations as string
+            login_session_id: loginSessionId, // Use the login_session_id from auth slice
+          };
+          
+          await apiClient.post('/log', logData); // <--- NEW API call for audit
+          console.log('Chat interaction logged successfully:', logData);
+        } catch (logError) {
+          console.error('Error logging chat interaction:', logError.response?.data || logError.message);
+          // Log errors but don't prevent the UI from displaying the AI response
         }
       } else {
         // More specific error message for debugging
@@ -174,6 +200,12 @@ export const submitFeedback = createAsyncThunk(
   async ({ messageId, type, text, messages }, { dispatch, getState }) => {
     const sessionId = getState().chat.sessionId;
     const userId = getState().chat.userId; // Get userId from state
+    
+    //Updated 
+    const userName = 'Test User';
+
+    const loginSessionId = 123456789;
+    
 
     const message = messages.find((msg) => msg.id === messageId);
     if (!message) {
@@ -192,14 +224,16 @@ export const submitFeedback = createAsyncThunk(
       const response = await axios.post(
         'https://app-azuresearch-qa-ps-esa.azurewebsites.net/feedback',
         {
-          session_id: sessionId,
-          user_name: userId, // Use dynamic userId for user_name
+          chat_session_id: sessionId,
+          user_name: userName, // user_name
           query: lastUserQuery,
           ai_response: message.ai_response || message.content, // Use ai_response if available
           citations:
             message.citations?.map((c) => c.title).join(', ') || 'No citations',
           feedback_type: type,
           feedback: text,
+          login_session_id: loginSessionId,
+          user_id: userId,
         },
         {
           headers: {
@@ -210,12 +244,14 @@ export const submitFeedback = createAsyncThunk(
       dispatch(
         setFeedbackStatus({ messageId, status: { submitted: true, type } })
       );
+      toast.success('Feedback submitted successfully!'); // Toast Feedback
       return response.data;
     } catch (error) {
       console.error(
         'Feedback submission API error:',
         error.response?.data || error.message
       );
+      toast.error('Failed to submit feedback.'); // If toast feedback error
       throw error;
     }
   }
