@@ -37,6 +37,17 @@ const cleanAiResponse = (text) => {
     .trim();
 };
 
+// Fallback document for when no citations are available
+const getFallbackCitation = () => {
+  return {
+    //id: '0',
+    title: 'How to Create a PeopleSoft ESA to Aerotek Support Ticket',
+    chunk: 'Please refer to this document for detailed instructions on how to raise a SNOW support ticket when you cannot find the information you are looking for.',
+    parent_id: 'https://sthubdevaioc273154123411.blob.core.windows.net/snowticket/How%20to%20Create%20a%20PeopleSoft%20ESA%20to%20Aerotek%20Support%20Ticket%20(1).docx',
+    isSupportDoc: true
+  };
+};
+
 // Async thunk for sending user question to actual API
 export const sendQuestionToAPI = createAsyncThunk(
   'chat/sendQuestionToAPI',
@@ -97,18 +108,26 @@ export const sendQuestionToAPI = createAsyncThunk(
         // Clean the AI response text before storing
         const cleanedAiResponse = cleanAiResponse(data.ai_response);
 
+        // Check if citations array is empty and add fallback document
+        let finalCitations = data.citations.map((citation) => ({
+          id: citation.id, // The ID from the API response for inline linking
+          title: citation.title,
+          chunk: citation.chunk, // 'chunk' contains the actual content
+          parent_id: citation.parent_id, // 'parent_id' is the PDF/source link
+        }));
+
+        // If no citations available, add the fallback support document
+        if (finalCitations.length === 0) {
+          finalCitations = [getFallbackCitation()];
+          console.log('No citations found, adding fallback support document');
+        }
+
         dispatch(
           updateMessageById({
             id: placeholderId,
             content: cleanedAiResponse, // Keep 'content' for compatibility
             ai_response: cleanedAiResponse, // Store the cleaned AI response
-            // Map the new 'citations' array to your message structure
-            citations: data.citations.map((citation) => ({
-              id: citation.id, // The ID from the API response for inline linking
-              title: citation.title,
-              chunk: citation.chunk, // 'chunk' contains the actual content
-              parent_id: citation.parent_id, // 'parent_id' is the PDF/source link
-            })),
+            citations: finalCitations, // Use finalCitations which includes fallback if needed
             query: data.query, // Store the query from the API response
           })
         );
