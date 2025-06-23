@@ -6,7 +6,7 @@ import { isTokenValid } from '../utils/isTokenValid';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { token, updateToken, loginUser } = useAuth();
+  const { token, updateToken, loginUser, storeLoginSessionId } = useAuth();
 
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
@@ -21,43 +21,67 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchUserData = async () => {
+      if (window.__hasLoggedInOnce) {
+        return; // Prevent second call in StrictMode
+      }
+      window.__hasLoggedInOnce = true;
+
       try {
         let res;
+        let userName = '';
+        let userGroup = '';
+
         if (import.meta.env.VITE_TOKEN_EXTRACT) {
           res = await apiClient.post(import.meta.env.VITE_TOKEN_EXTRACT, {
             token,
           });
           console.log('res data=> ', res.data);
-          if (res.status === 200) {
-            const { name, group } = res.data;
-            loginUser({ name, group, token });
 
+          if (res.status === 200) {
+            userName = Array.isArray(res.data.name)
+              ? res.data.name[0]
+              : res.data.name;
+            userGroup = Array.isArray(res.data.group)
+              ? res.data.group[0]
+              : res.data.group;
+
+            loginUser({ name: userName, group: userGroup, token });
             navigate('/home');
           }
         } else {
           res = await apiClient.post('/saml/token/extract', null, {
-            params: {
-              token,
-            },
+            params: { token },
           });
           console.log('res data=> ', res.data);
-          if (res.status === 200) {
-            const { name, group } = res.data.user_data;
-            loginUser({ name, group, token });
 
+          if (res.status === 200) {
+            userName = Array.isArray(res.data.user_data.name)
+              ? res.data.user_data.name[0]
+              : res.data.user_data.name;
+            userGroup = Array.isArray(res.data.user_data.group)
+              ? res.data.user_data.group[0]
+              : res.data.user_data.group;
+
+            loginUser({ name: userName, group: userGroup, token });
             navigate('/home');
           }
         }
 
-        // const logResponse = await apiClient.post('/pto_user_login_log', {
-        //   user_name: res.data.name
-        //     ? res.data.name
-        //     : res.data.user_data.name.toString(),
-        // });
+        const logResponse = await apiClient.post('/log/user', {
+          user_name: userName,
+        });
 
-        // storeSession(logResponse.data.session_id);
+        if (logResponse.data && logResponse.data.login_session_id) {
+          storeLoginSessionId(logResponse.data.login_session_id);
+          console.log('Login data logged successfully:', logResponse.data);
+        } else {
+          console.warn(
+            'Login log response did not contain login_session_id:',
+            logResponse.data
+          );
+        }
 
-        // console.log('Login data logged');
+        navigate('/home');
       } catch (error) {
         console.error('Error fetching user data:', error);
         navigate('/');
@@ -65,7 +89,7 @@ const Dashboard = () => {
     };
 
     token && fetchUserData();
-  }, [token]);
+  }, [token, loginUser, navigate, updateToken, storeLoginSessionId]);
 
   return (
     <div className='min-h-screen flex items-center flex-col gap-4 justify-center'>
