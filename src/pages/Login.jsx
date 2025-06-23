@@ -15,7 +15,7 @@ const Login = () => {
     } else {
       window.location.href =
         import.meta.env.VITE_LOGIN_URI ||
-        'https://green-sand-0888f430f.6.azurestaticapps.net/saml/login';
+        'https://app-azuresearch-qa-ps-esa.azurewebsites.net/saml/login';
     }
   }, [token]);
 
