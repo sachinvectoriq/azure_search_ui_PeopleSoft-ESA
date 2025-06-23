@@ -3,7 +3,7 @@ import axios from 'axios';
 const apiClient = axios.create({
   baseURL:
     import.meta.env.VITE_API ||
-    'https://app-azuresearch-qa-ps-esa.azurewebsites.net',
+    'https://green-sand-0888f430f.6.azurestaticapps.net/',
   headers: {
     Accept: 'application/json',
     'Content-Type': 'application/json',

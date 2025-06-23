@@ -8,15 +8,15 @@ const Login = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // console.log('token: ', token);
-    // if (token) console.log('is token valid: ', isTokenValid(token));
-    // if (token) {
-    navigate('/home');
-    // } else {
-    //   window.location.href =
-    //     import.meta.env.VITE_LOGIN_URI ||
-    //     'https://qa-azure-search.azurewebsites.net/saml/login';
-    // }
+    console.log('token: ', token);
+    if (token) console.log('is token valid: ', isTokenValid(token));
+    if (token) {
+      navigate('/home');
+    } else {
+      window.location.href =
+        import.meta.env.VITE_LOGIN_URI ||
+        'https://green-sand-0888f430f.6.azurestaticapps.net/saml/login';
+    }
   }, [token]);
 
   return (
