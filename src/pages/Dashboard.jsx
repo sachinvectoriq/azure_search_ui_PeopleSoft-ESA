@@ -27,19 +27,41 @@ const Dashboard = () => {
       window.__hasLoggedInOnce = true;
 
       try {
-        // ✅ HARD-CODED USERNAME & GROUP
-        const userName = 'Test User';
-        const userGroup = 'HardCodedGroup';  // you can keep any value
-        const loginSessionId = 123456789; // bigint like value
+        let res;
 
-        // ✅ Directly login the user with hardcoded values
-        loginUser({ name: userName, group: userGroup, token });
+        if (import.meta.env.VITE_TOKEN_EXTRACT) {
+          res = await apiClient.post(import.meta.env.VITE_TOKEN_EXTRACT, {
+            token,
+          });
+          console.log('res data=> ', res.data);
+          if (res.status === 200) {
+            const { name, group } = res.data;
+            loginUser({ name, group, token });
 
-        // ✅ Directly store hardcoded login session id
-        storeLoginSessionId(loginSessionId);
-        console.log('Login data logged successfully.');
+            // ✅ Directly store hardcoded login session id
+            // storeLoginSessionId(loginSessionId);
+            console.log('Login data logged successfully.');
 
-        navigate('/home');
+            navigate('/home');
+          }
+        } else {
+          res = await apiClient.post('/saml/token/extract', null, {
+            params: {
+              token,
+            },
+          });
+          console.log('res data=> ', res.data);
+          if (res.status === 200) {
+            const { name, group } = res.data.user_data;
+            loginUser({ name, group, token });
+
+            // ✅ Directly store hardcoded login session id
+            // storeLoginSessionId(loginSessionId);
+            console.log('Login data logged successfully.');
+
+            navigate('/home');
+          }
+        }
       } catch (error) {
         console.error('Error fetching user data:', error);
         navigate('/');
