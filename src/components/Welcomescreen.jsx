@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import milo from '../assets/milo.png';  // adjust path based on actual location
 
 const WelcomeScreen = () => {
   return (
@@ -10,6 +11,11 @@ const WelcomeScreen = () => {
       exit={{ opacity: 0, y: 30 }}
       transition={{ duration: 0.5, ease: 'easeOut' }}
     >
+      <img 
+        src={milo} 
+        alt="Milo Bot" 
+        className="w-35 h-35 mb-6 rounded-full shadow-lg"
+      />
       <h1 className='text-4xl font-semibold mb-4 text-gray-800'>
         Start chatting
       </h1>
