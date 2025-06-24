@@ -26,11 +26,11 @@ const Home = () => {
     dispatch(setPreviewDocURL({ url }));
   };
 
-  // useEffect(() => {
-  //   if (!user || !user?.name || !user?.group) {
-  //     navigate('/');
-  //   }
-  // }, [user]);
+ useEffect(() => {
+   if (!user || !user?.name || !user?.group) {
+      navigate('/');
+    }
+  }, [user]);
 
   return (
     <div id='main_app'>
