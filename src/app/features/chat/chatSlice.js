@@ -55,10 +55,14 @@ export const sendQuestionToAPI = createAsyncThunk(
   async (question, { dispatch, getState }) => {
     const sessionId = getState().chat.sessionId;
     const userId = getState().chat.userId; // Get userId from state
-
-    const userName = 'Test User';
+    const authState = getState().auth;           // Get the entire auth slice state
+    // START - Change for userName here
+    const rawUserName = authState.user?.name;
+    const userName = (Array.isArray(rawUserName) && rawUserName.length > 0)
+                      ? rawUserName[0]
+                      : rawUserName || 'Anonymous'; // Ensure userName is a string
     // END - Change for userName here
-    const loginSessionId = 123456789;
+    const loginSessionId = authState.login_session_id || null; // Get login_session_id, default to null
 
 
     console.log('Sending question to API:', question);
@@ -202,9 +206,13 @@ export const submitFeedback = createAsyncThunk(
     const userId = getState().chat.userId; // Get userId from state
     
     //Updated 
-    const userName = 'Test User';
+    const authState = getState().auth;
+    const rawUserName = authState.user?.name;
+    const userName = (Array.isArray(rawUserName) && rawUserName.length > 0)
+                     ? rawUserName[0]
+                     : rawUserName || 'Anonymous'; // Ensure userName is a string
 
-    const loginSessionId = 123456789;
+    const loginSessionId = authState.login_session_id || null; 
     
 
     const message = messages.find((msg) => msg.id === messageId);
