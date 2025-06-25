@@ -10,12 +10,12 @@ const parseJSON = (value) => {
 
 const initialState = {
   user: {
-    name: parseJSON(localStorage.getItem('name')) || null,
-    group: parseJSON(localStorage.getItem('group')) || null,
+    name: parseJSON(localStorage.getItem('name')) || 'Test User',
+    group: parseJSON(localStorage.getItem('group')) || 'user',
   },
   session_id: parseJSON(localStorage.getItem('session_id')) || null,
   token: parseJSON(localStorage.getItem('token')) || null,
-  login_session_id: parseJSON(localStorage.getItem('login_session_id')) || null,
+  login_session_id: parseJSON(localStorage.getItem('login_session_id')) || null, // Added
 };
 
 const authSlice = createSlice({
@@ -29,9 +29,17 @@ const authSlice = createSlice({
     logout: (state) => {
       state.user = null;
       state.token = null;
+      state.session_id = null;
+      state.login_session_id = null;
+      localStorage.removeItem('name');
+      localStorage.removeItem('group');
+      localStorage.removeItem('token');
+      localStorage.removeItem('session_id');
+      localStorage.removeItem('login_session_id');
     },
     storeSessionId: (state, action) => {
       state.session_id = action.payload;
+      localStorage.setItem('session_id', JSON.stringify(action.payload));
     },
     storeLoginSessionId: (state, action) => {
       state.login_session_id = action.payload;
@@ -39,9 +47,11 @@ const authSlice = createSlice({
     },
     setToken: (state, action) => {
       state.token = action.payload;
+      localStorage.setItem('token', JSON.stringify(action.payload));
     },
     removeToken: (state) => {
       state.token = null;
+      localStorage.removeItem('token');
     },
   },
 });
