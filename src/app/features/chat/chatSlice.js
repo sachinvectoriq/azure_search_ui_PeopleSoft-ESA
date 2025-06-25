@@ -12,11 +12,9 @@ let getSessionId = () => {
   return id;
 };
 
-// New function to get/set UserID
 let getUserId = () => {
-  let id = localStorage.getItem('user_id'); // Using localStorage for persistence across browser sessions
+  let id = localStorage.getItem('user_id');
   if (!id) {
-    // Generate a simple unique ID. In a real app, this might come from an auth service.
     id =
       'user_' +
       Date.now().toString() +
@@ -26,241 +24,171 @@ let getUserId = () => {
   return id;
 };
 
-// Function to clean the AI response text
 const cleanAiResponse = (text) => {
   if (!text) return text;
-  // Refined regex to match "JSON list of used source numbers:"
-  // with optional leading/trailing whitespace and line breaks,
-  // and optionally followed by "[]" at the very end of the string.
-  // This version is more flexible with newlines and spaces before and after.
   return text
     .replace(/\s*JSON list of used source numbers:\s*(\[\])?\s*$/gm, '')
     .trim();
 };
 
-// Fallback document for when no citations are available
-const getFallbackCitation = () => {
-  return {
-    id: '0',
-    title: 'How to Create a PeopleSoft ESA to Aerotek Support Ticket',
-    chunk: 'Please refer to this document for detailed instructions on how to raise a SNOW support ticket when you cannot find the information you are looking for.',
-    parent_id: 'https://sthubdevaioc273154123411.blob.core.windows.net/snowticket/How%20to%20Create%20a%20PeopleSoft%20ESA%20to%20Aerotek%20Support%20Ticket%20(1).docx',
-    isSupportDoc: true
-  };
-};
+const getFallbackCitation = () => ({
+  id: '0',
+  title: 'How to Create a PeopleSoft ESA to Aerotek Support Ticket',
+  chunk: 'Please refer to this document for detailed instructions on how to raise a SNOW support ticket when you cannot find the information you are looking for.',
+  parent_id: 'https://sthubdevaioc273154123411.blob.core.windows.net/snowticket/How%20to%20Create%20a%20PeopleSoft%20ESA%20to%20Aerotek%20Support%20Ticket%20(1).docx',
+  isSupportDoc: true
+});
 
-// Async thunk for sending user question to actual API
 export const sendQuestionToAPI = createAsyncThunk(
   'chat/sendQuestionToAPI',
   async (question, { dispatch, getState }) => {
-    const sessionId = getState().chat.sessionId;
-    const userId = getState().chat.userId; // Get userId from state
-    const authState = getState().auth;           // Get the entire auth slice state
-    // START - Change for userName here
-    const rawUserName = authState.user?.name;
-    const userName = (Array.isArray(rawUserName) && rawUserName.length > 0)
-                      ? rawUserName[0]
-                      : rawUserName || 'Anonymous'; // Ensure userName is a string
-    // END - Change for userName here
-    const loginSessionId = authState.login_session_id || null; // Get login_session_id, default to null
-
+    const { chat, auth } = getState();
+    const sessionId = chat.sessionId;
+    const userId = chat.userId;
+    const loginSessionId = auth.login_session_id || null;
+    const userNameRaw = auth.user?.name;
+    const userName = (Array.isArray(userNameRaw) && userNameRaw.length > 0)
+      ? userNameRaw[0]
+      : userNameRaw || 'Anonymous';
 
     console.log('Sending question to API:', question);
     console.log('Session ID:', sessionId);
-    console.log('User ID:', userId); // Log the userId
-    console.log('User Name:', userName); // Log for verification
-    console.log('Login Session ID :', loginSessionId); // Log for verification
+    console.log('User ID:', userId);
+    console.log('User Name:', userName);
+    console.log('Login Session ID:', loginSessionId);
 
-    // Clear follow-ups at the start of a new question
     dispatch(setFollowUps([]));
 
-    const userMessage = {
+    const userMsg = {
       id: Date.now(),
       role: 'user',
       content: question,
       timestamp: new Date().toISOString(),
     };
-    dispatch(addMessage(userMessage));
+    dispatch(addMessage(userMsg));
 
     const placeholderId = Date.now() + 1;
-    const placeholderMessage = {
+    dispatch(addMessage({
       id: placeholderId,
       role: 'agent',
       content: '...',
-      ai_response: '...', // Initialize ai_response for the placeholder
-      citations: [], // Initialize citations for the placeholder
+      ai_response: '...',
+      citations: [],
       timestamp: new Date().toISOString(),
-    };
-    dispatch(addMessage(placeholderMessage));
+    }));
     dispatch(setPendingMessageId(placeholderId));
+    dispatch(setIsResponding(true));
 
     try {
-      // Set isResponding to true when the API call starts
-      dispatch(setIsResponding(true));
-      const response = await apiClient.post(
-        '/ask',
-        {
-          query: question,
-          user_id: userId, // Use dynamic userId
-          session_id: sessionId,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const res = await apiClient.post('/ask', {
+        query: question,
+        user_id: userId,
+        session_id: sessionId,
+      }, { headers: { 'Content-Type': 'application/json' } });
 
-      const data = response.data;
+      const data = res.data;
       console.log('API response:', data);
 
-      // Validate the new API response structure
-      // Changed 'data.chunks' to 'data.citations' to match the new API structure
       if (data?.ai_response && Array.isArray(data.citations)) {
-        // Clean the AI response text before storing
-        const cleanedAiResponse = cleanAiResponse(data.ai_response);
-
-        let finalCitations = data.citations.map((citation) => ({
-          id: citation.id, // The ID from the API response for inline linking
-          title: citation.title,
-          chunk: citation.chunk, // 'chunk' contains the actual content
-          parent_id: citation.parent_id, // 'parent_id' is the PDF/source link
+        const cleaned = cleanAiResponse(data.ai_response);
+        let citations = data.citations.map(c => ({
+          id: c.id,
+          title: c.title,
+          chunk: c.chunk,
+          parent_id: c.parent_id
         }));
 
-        // If no citations available, add the fallback support document
-        if (finalCitations.length === 0) {
-          finalCitations = [getFallbackCitation()];
+        if (citations.length === 0) {
+          citations = [getFallbackCitation()];
           console.log('No citations found, adding fallback support document');
         }
 
-        dispatch(
-          updateMessageById({
-            id: placeholderId,
-            content: cleanedAiResponse, // Keep 'content' for compatibility
-            ai_response: cleanedAiResponse, // Store the cleaned AI response
-            // Map the new 'citations' array to your message structure
-            citations: finalCitations, // Use finalCitations which includes fallback if needed
-            query: data.query, // Store the query from the API response
-          })
-        );
-        // Re-enable follow-ups logic
+        dispatch(updateMessageById({
+          id: placeholderId,
+          content: cleaned,
+          ai_response: cleaned,
+          citations,
+          query: data.query
+        }));
+
         if (data.follow_ups) {
-          const followUpQuestions = data.follow_ups
-            .split('\n')
-            .map((q) => q.trim())
-            .filter(Boolean);
-          dispatch(setFollowUps(followUpQuestions));
-        } else {
-          dispatch(setFollowUps([]));
+          dispatch(setFollowUps(
+            data.follow_ups.split('\n').map(q => q.trim()).filter(Boolean)
+          ));
         }
 
-        try {
-          const logData = {
-            chat_session_id: sessionId,
-            user_id: userId,
-            user_name: userName, // Use the user_name from auth slice
-            query: question, // The original question
-            ai_response: cleanedAiResponse,
-            citations: data.citations.map(c => c.title).join(', ') || 'No citations', // Format citations as string
-            login_session_id: loginSessionId, // Use the login_session_id from auth slice
-          };
-          
-          await apiClient.post('/log', logData); // <--- NEW API call for audit
-          console.log('Chat interaction logged successfully:', logData);
-        } catch (logError) {
-          console.error('Error logging chat interaction:', logError.response?.data || logError.message);
-          // Log errors but don't prevent the UI from displaying the AI response
-        }
+        const logData = {
+          chat_session_id: sessionId,
+          user_id: userId,
+          user_name: userName,
+          query: question,
+          ai_response: cleaned,
+          citations: citations.map(c => c.title).join(', ') || 'No citations',
+          login_session_id: loginSessionId
+        };
+        await apiClient.post('/log', logData);
+        console.log('Chat interaction logged successfully:', logData);
       } else {
-        // More specific error message for debugging
-        throw new Error(
-          'Invalid API response structure: missing ai_response or citations array.'
-        );
+        throw new Error('Invalid API response: missing ai_response or citations');
       }
-    } catch (error) {
-      console.error('API error:', error);
-      dispatch(
-        updateMessageById({
-          id: placeholderId,
-          content: `Something went wrong: ${error.message}`,
-          ai_response: `Something went wrong: ${error.message}`, // Update ai_response with error
-          citations: [],
-          query: question, // Store the original question as query in case of error
-        })
-      );
-      dispatch(setError(error.message));
+    } catch (err) {
+      console.error('API error:', err);
+      dispatch(updateMessageById({
+        id: placeholderId,
+        content: `Something went wrong: ${err.message}`,
+        ai_response: `Something went wrong: ${err.message}`,
+        citations: [],
+        query: question
+      }));
+      dispatch(setError(err.message));
     } finally {
       dispatch(clearInput());
       dispatch(setPendingMessageId(null));
-      // Set isResponding to false when the API call finishes (success or failure)
       dispatch(setIsResponding(false));
     }
   }
 );
 
-// Async thunk for submitting feedback
 export const submitFeedback = createAsyncThunk(
   'chat/submitFeedback',
   async ({ messageId, type, text, messages }, { dispatch, getState }) => {
-    const sessionId = getState().chat.sessionId;
-    const userId = getState().chat.userId; // Get userId from state
-    
-    //Updated 
-    const authState = getState().auth;
-    const rawUserName = authState.user?.name;
-    const userName = (Array.isArray(rawUserName) && rawUserName.length > 0)
-                     ? rawUserName[0]
-                     : rawUserName || 'Anonymous'; // Ensure userName is a string
+    const { chat, auth } = getState();
+    const sessionId = chat.sessionId;
+    const userId = chat.userId;
+    const loginSessionId = auth.login_session_id || null;
+    const userNameRaw = auth.user?.name;
+    const userName = (Array.isArray(userNameRaw) && userNameRaw.length > 0)
+      ? userNameRaw[0]
+      : userNameRaw || 'Anonymous';
 
-    const loginSessionId = authState.login_session_id || null; 
-    
+    console.log('Submitting feedback for message ID:', messageId);
+    console.log('Login Session ID:', loginSessionId);
 
-    const message = messages.find((msg) => msg.id === messageId);
-    if (!message) {
-      throw new Error('Message not found for feedback');
-    }
+    const msg = messages.find(m => m.id === messageId);
+    if (!msg) throw new Error('Message not found for feedback');
 
-    // Use message.query if available, otherwise fallback to finding it from previous user messages
-    // This is the new, more robust way to get the last user query
-    const lastUserQuery =
-      message.query ||
-      messages.find((msg) => msg.id < messageId && msg.role === 'user')
-        ?.content ||
-      'Unknown query';
+    const query = msg.query || messages.find(m => m.id < messageId && m.role === 'user')?.content || 'Unknown query';
 
     try {
-      const response = await axios.post(
-        'https://app-azuresearch-qa-ps-esa.azurewebsites.net/feedback',
-        {
-          chat_session_id: sessionId,
-          user_name: userName, // user_name
-          query: lastUserQuery,
-          ai_response: message.ai_response || message.content, // Use ai_response if available
-          citations:
-            message.citations?.map((c) => c.title).join(', ') || 'No citations',
-          feedback_type: type,
-          feedback: text,
-          login_session_id: loginSessionId,
-          user_id: userId,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      dispatch(
-        setFeedbackStatus({ messageId, status: { submitted: true, type } })
-      );
-      toast.success('Feedback submitted successfully!'); // Toast Feedback
-      return response.data;
-    } catch (error) {
-      console.error(
-        'Feedback submission API error:',
-        error.response?.data || error.message
-      );
-      toast.error('Failed to submit feedback.'); // If toast feedback error
-      throw error;
+      const res = await axios.post('https://app-azuresearch-qa-ps-esa.azurewebsites.net/feedback', {
+        chat_session_id: sessionId,
+        user_name: userName,
+        query,
+        ai_response: msg.ai_response || msg.content,
+        citations: msg.citations?.map(c => c.title).join(', ') || 'No citations',
+        feedback_type: type,
+        feedback: text,
+        login_session_id: loginSessionId,
+        user_id: userId
+      }, { headers: { 'Content-Type': 'application/json' } });
+
+      dispatch(setFeedbackStatus({ messageId, status: { submitted: true, type } }));
+      toast.success('Feedback submitted successfully!');
+      return res.data;
+    } catch (err) {
+      console.error('Feedback API error:', err.response?.data || err.message);
+      toast.error('Failed to submit feedback.');
+      throw err;
     }
   }
 );
@@ -268,10 +196,10 @@ export const submitFeedback = createAsyncThunk(
 const initialState = {
   messages: [],
   input: '',
-  isResponding: false, // Renamed 'loading' to 'isResponding' for clarity
+  isResponding: false,
   error: null,
   pendingMessageId: null,
-  followUps: [], // This will now be populated again
+  followUps: [],
   feedbackStatus: {},
   samplePrompts: [
     'What is bullhorn',
@@ -280,7 +208,7 @@ const initialState = {
     "What's the difference between React and Vue?",
   ],
   sessionId: getSessionId(),
-  userId: getUserId(), // Initialize userId here
+  userId: getUserId(),
   previewDocURL: null,
 };
 
@@ -288,72 +216,46 @@ const chatSlice = createSlice({
   name: 'chat',
   initialState,
   reducers: {
-    setInput: (state, action) => {
-      state.input = action.payload;
-    },
-    setPreviewDocURL: (state, action) => {
-      state.previewDocURL = action.payload.url;
-    },
-    removePreviewDocURL: (state) => {
-      state.previewDocURL = null;
-    },
+    setInput: (state, action) => { state.input = action.payload; },
+    setPreviewDocURL: (state, action) => { state.previewDocURL = action.payload.url; },
+    removePreviewDocURL: (state) => { state.previewDocURL = null; },
     addMessage: (state, action) => {
-      // Ensure that 'ai_response', 'citations', and 'query' are initialized for agent messages
-      // This is crucial for consistency across messages, especially for placeholders
-      if (action.payload.role === 'agent' && !action.payload.ai_response) {
-        action.payload.ai_response = action.payload.content;
+      const p = action.payload;
+      if (p.role === 'agent') {
+        p.ai_response = p.ai_response || p.content;
+        p.citations = p.citations || [];
+        p.query = p.query || '';
       }
-      if (action.payload.role === 'agent' && !action.payload.citations) {
-        action.payload.citations = [];
-      }
-      if (action.payload.role === 'agent' && !action.payload.query) {
-        action.payload.query = ''; // Initialize query for agent messages
-      }
-      state.messages.push(action.payload);
+      state.messages.push(p);
     },
     addPrompt: (state, action) => {
-      state.messages = [
-        {
-          id: Date.now(),
-          role: 'user',
-          content: action.payload.text,
-          timestamp: new Date().toISOString(),
-        },
-      ];
+      state.messages = [{
+        id: Date.now(),
+        role: 'user',
+        content: action.payload.text,
+        timestamp: new Date().toISOString(),
+      }];
     },
-    setPendingMessageId: (state, action) => {
-      state.pendingMessageId = action.payload;
-    },
+    setPendingMessageId: (state, action) => { state.pendingMessageId = action.payload; },
     updateMessageById: (state, action) => {
-      // Destructure new fields: ai_response and query
       const { id, content, ai_response, citations, query } = action.payload;
-      const index = state.messages.findIndex((msg) => msg.id === id);
-      if (index !== -1) {
-        state.messages[index] = {
-          ...state.messages[index],
+      const i = state.messages.findIndex(m => m.id === id);
+      if (i !== -1) {
+        state.messages[i] = {
+          ...state.messages[i],
           content,
-          ai_response:
-            ai_response !== undefined
-              ? ai_response
-              : state.messages[index].ai_response, // Update ai_response
-          citations, // Update citations directly (as new format)
-          query: query !== undefined ? query : state.messages[index].query, // Update query
+          ai_response: ai_response !== undefined ? ai_response : state.messages[i].ai_response,
+          citations,
+          query: query !== undefined ? query : state.messages[i].query,
         };
       }
     },
-    setFollowUps: (state, action) => {
-      state.followUps = action.payload;
-    },
+    setFollowUps: (state, action) => { state.followUps = action.payload; },
     setFeedbackStatus: (state, action) => {
-      const { messageId, status } = action.payload;
-      state.feedbackStatus[messageId] = status;
+      state.feedbackStatus[action.payload.messageId] = action.payload.status;
     },
-    setIsResponding: (state, action) => {
-      state.isResponding = action.payload;
-    },
-    setError: (state, action) => {
-      state.error = action.payload;
-    },
+    setIsResponding: (state, action) => { state.isResponding = action.payload; },
+    setError: (state, action) => { state.error = action.payload; },
     clearChat: (state) => {
       state.messages = [];
       state.followUps = [];
@@ -363,9 +265,7 @@ const chatSlice = createSlice({
       state.pendingMessageId = null;
       state.isResponding = false;
     },
-    clearInput: (state) => {
-      state.input = '';
-    },
+    clearInput: (state) => { state.input = ''; },
     resetToWelcome: (state) => {
       state.messages = [];
       state.feedbackStatus = {};
@@ -380,60 +280,39 @@ const chatSlice = createSlice({
       }
     },
     resetSessionId: (state) => {
-      const newId = Date.now().toString();
-      sessionStorage.setItem('session_id', newId);
-      state.sessionId = newId;
-      console.log('Session ID reset to:', newId);
+      const id = Date.now().toString();
+      sessionStorage.setItem('session_id', id);
+      state.sessionId = id;
+      console.log('Session ID reset to:', id);
       state.isResponding = false;
     },
-    // New reducer to reset UserID
     resetUserId: (state) => {
-      const newId =
-        'user_' +
-        Date.now().toString() +
-        Math.random().toString(36).substring(2, 8);
-      localStorage.setItem('user_id', newId);
-      state.userId = newId;
-      console.log('User ID reset to:', newId);
-    },
+      const id = 'user_' + Date.now() + Math.random().toString(36).substring(2, 8);
+      localStorage.setItem('user_id', id);
+      state.userId = id;
+      console.log('User ID reset to:', id);
+    }
   },
   extraReducers: (builder) => {
     builder
       .addCase(sendQuestionToAPI.rejected, (state, action) => {
-        // Corrected error message to be more robust
-        state.error =
-          action.payload ||
-          action.error.message ||
-          'An unexpected error occurred.';
-        state.isResponding = false; // Ensure loading is false
+        state.error = action.payload || action.error.message || 'An unexpected error occurred.';
+        state.isResponding = false;
       })
       .addCase(submitFeedback.fulfilled, (state, action) => {
-        console.log('Feedback submitted successfully:', action.payload);
+        console.log('Feedback submitted:', action.payload);
       })
       .addCase(submitFeedback.rejected, (state, action) => {
-        console.error('Feedback submission failed:', action.error);
+        console.error('Feedback failed:', action.error);
       });
-  },
+  }
 });
 
 export const {
-  setInput,
-  setPreviewDocURL,
-  removePreviewDocURL,
-  addMessage,
-  addPrompt,
-  setPendingMessageId,
-  updateMessageById,
-  setFollowUps,
-  setFeedbackStatus,
-  setIsResponding,
-  setError,
-  clearChat,
-  clearInput,
-  resetToWelcome,
-  clearIfInputEmpty,
-  resetSessionId,
-  resetUserId, // Export the new action
+  setInput, setPreviewDocURL, removePreviewDocURL, addMessage, addPrompt,
+  setPendingMessageId, updateMessageById, setFollowUps, setFeedbackStatus,
+  setIsResponding, setError, clearChat, clearInput, resetToWelcome,
+  clearIfInputEmpty, resetSessionId, resetUserId
 } = chatSlice.actions;
 
 export default chatSlice.reducer;
