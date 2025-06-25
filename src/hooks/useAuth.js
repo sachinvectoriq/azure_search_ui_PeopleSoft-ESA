@@ -5,6 +5,7 @@ import {
   setToken,
   removeToken,
   storeSessionId,
+  storeLoginSessionId,
 } from '../app/features/auth/authSlice';
 
 const useAuth = () => {
@@ -38,6 +39,10 @@ const useAuth = () => {
     dispatch(removeToken());
   };
 
+  const storeLoginSessionIdAction = (id) => {
+    dispatch(storeLoginSessionId(id));
+  };
+
   return {
     user,
     token,
@@ -47,6 +52,7 @@ const useAuth = () => {
     updateToken,
     clearToken,
     storeSession,
+    storeLoginSessionId: storeLoginSessionIdAction,
   };
 };
 
