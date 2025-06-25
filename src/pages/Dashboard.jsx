@@ -32,21 +32,15 @@ const Dashboard = () => {
         let userGroup = '';
 
         if (import.meta.env.VITE_TOKEN_EXTRACT) {
-          res = await apiClient.post(import.meta.env.VITE_TOKEN_EXTRACT, {
-            token,
-          });
+          res = await apiClient.post(import.meta.env.VITE_TOKEN_EXTRACT, { token });
           console.log('res data=> ', res.data);
 
           if (res.status === 200) {
-            userName = Array.isArray(res.data.name)
-              ? res.data.name[0]
-              : res.data.name;
-            userGroup = Array.isArray(res.data.group)
-              ? res.data.group[0]
-              : res.data.group;
+            userName = Array.isArray(res.data.name) ? res.data.name[0] : res.data.name;
+            userGroup = Array.isArray(res.data.group) ? res.data.group[0] : res.data.group;
 
             loginUser({ name: userName, group: userGroup, token });
-            navigate('/home');
+            // navigate('/home'); // ❌ REMOVE: Navigating too early prevents login_session_id from being stored
           }
         } else {
           res = await apiClient.post('/saml/token/extract', null, {
@@ -63,7 +57,7 @@ const Dashboard = () => {
               : res.data.user_data.group;
 
             loginUser({ name: userName, group: userGroup, token });
-            navigate('/home');
+            // navigate('/home'); //  REMOVE: Navigating too early prevents login_session_id from being stored
           }
         }
 
@@ -81,7 +75,7 @@ const Dashboard = () => {
           );
         }
 
-        navigate('/home');
+        navigate('/home'); // 
       } catch (error) {
         console.error('Error fetching user data:', error);
         navigate('/');
