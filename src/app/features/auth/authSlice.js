@@ -10,8 +10,8 @@ const parseJSON = (value) => {
 
 const initialState = {
   user: {
-    name: parseJSON(localStorage.getItem('name')) || 'Test User',
-    group: parseJSON(localStorage.getItem('group')) || 'user',
+    name: parseJSON(localStorage.getItem('name')) || null,
+    group: parseJSON(localStorage.getItem('group')) || null,
   },
   session_id: parseJSON(localStorage.getItem('session_id')) || null,
   token: parseJSON(localStorage.getItem('token')) || null,
