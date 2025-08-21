@@ -37,7 +37,7 @@ const getFallbackCitation = () => ({
   id: '0',
   title: 'How to Create a PeopleSoft ESA to Aerotek Support Ticket',
   chunk: 'Please refer to this document for detailed instructions on how to raise a SNOW support ticket when you cannot find the information you are looking for.',
-  parent_id:'https://sthubdevaioc273154123411.blob.core.windows.net/snowticket/How%20to%20Create%20a%20PeopleSoft%20ESA%20to%20Aerotek%20Support%20Ticket%20(1).docx',
+  parent_id:'https://sthubdevaioc273154123411.blob.core.windows.net/snowticket/How%20to%20Create%20a%20PeopleSoft%20Financial%20Support%20Ticket%20.docx',
   isSupportDoc: true
 });
 
